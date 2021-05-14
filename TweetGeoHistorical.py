@@ -6,7 +6,7 @@
 # @reference: https://www.earthdatascience.org/courses/use-data-open-source-python/intro-to-apis/twitter-data-in-python/
 
 # EXECUTE 01.TWSEARCH.PY
-from selenium import ebdriver
+from selenium import webdriver
 from bs4 import Beautiful Soup
 import time, datetime, json
 
