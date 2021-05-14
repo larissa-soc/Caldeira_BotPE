@@ -5,6 +5,157 @@
 # @description:     Search existing tweets
 # @reference: https://www.earthdatascience.org/courses/use-data-open-source-python/intro-to-apis/twitter-data-in-python/
 
+# EXECUTE 01.TWSEARCH.PY
+from selenium import ebdriver
+from bs4 import Beautiful Soup
+import time, datetime, json
+
+url = "https://twitter.com/search?q=catholic%20sex%20abuse&src=typed_query"
+
+#use chrome core
+bot = webdriver.Chrome(executable_path="assets/chromedriver")
+bot.get(url)
+
+f = open("assets/tweets.csv", "a", encoding="utf-8")
+f.write('user_id, user_name, screen_name, status_id, created_at, time_integer, reply_num, favorite_num, content \n')
+start = datetime.datetime.now()
+time_limit= 60
+texts = []
+
+while len(bot.find_elements_by_xpath('//div[contains(text(), "Back to top ↑")]')) != 1:
+    time.sleep(5)
+    bot.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    soup = BeautifulSoup(bot.page_source, 'html.parser')
+    tweets = soup.find_all('li', class_="stream-item")[-20:] # only process the newly-acquired tweets.
+    if int((datetime.datetime.now() - start).seconds) >= time_limit: # if longer than a minute, then stop scrolling.
+        break
+    for tweet in tweets:
+        try:
+            user_json = json.loads(tweet.div.attrs["data-reply-to-users-json"])
+            user_id = int(user_json[0]['id_str'])
+            user_name = user_json[0]['screen_name']
+            screen_name = user_json[0]['name']
+            status_id = int(tweet.attrs["data-item-id"])
+            text = tweet.find("p").text.strip().replace("\n", "")
+            created_at = tweet.find("small", class_="time").a.attrs["title"]
+            time_integer = tweet.find("small", class_="time").a.span["data-time-ms"]
+            reply_num = tweet.find("div", class_="ProfileTweet-action--reply").find("span", class_="ProfileTweet-actionCountForPresentation").text
+            retweet_num = tweet.find("div", class_="ProfileTweet-action--retweet").find("span", class_="ProfileTweet-actionCountForPresentation").text
+            favorite_num = tweet.find("div", class_="ProfileTweet-action--favorite").find("span", class_="ProfileTweet-actionCountForPresentation").text
+            inst_url = ""
+            if "www.instagram.com" in text:
+                inst_url = tweet.p.a.attrs["title"]
+            record = '%d, %s, %s, %d, %s， %s， %s， %s， %s， %s \n' % (user_id, user_name, screen_name, status_id, created_at, time_integer, reply_num, retweet_num, favorite_num, text)
+            print(record)
+            if (text not in texts):
+                f.write(record)
+            texts.append(text)
+        except:
+            pass
+f.close()
+bot.close()
+print("finished")
+
+if __name__ == "__main__":
+    pass
+
+
+###########
+############
+#end of 01_twsearch code
+########
+########
+
+#Run 02_geosearch.py
+
+import tweepy, json, time, csv
+
+class StreamListener(tweepy.StreamListener):
+    """tweepy.StreamListener is a class provided by tweepy used to access
+    the Twitter Streaming API to collect tweets in real-time.
+    """
+
+    def __init__(self, time_limit=60, file=""):
+        """class initialization"""
+        self.start_time = time.time()
+        self.limit = time_limit
+        self.f = open(file, "w", newline='', encoding="utf-8") # mode a, r, w
+        fieldnames = ['id', 'username', 'created_at', 'lng', 'lat', 'text']
+        self.writer = csv.DictWriter(self.f, fieldnames=fieldnames)
+        self.writer.writeheader()
+        super(StreamListener, self).__init__()
+
+    def on_data(self, data):
+        """This is called when data are streamed in."""
+        if (time.time() - self.start_time) < self.limit:
+            datajson = json.loads(data)
+            print (datajson)
+            id = datajson['id']
+            username = datajson['user']['screen_name']
+            created_at = datajson['created_at']
+            text = datajson['text'].strip().replace("\n", "")
+
+            # process the geo-tags
+            if datajson['coordinates'] == None:
+                bbox = datajson['place']['bounding_box']['coordinates'][0]
+                lng = (bbox[0][0] + bbox[2][0]) / 2.0
+                lat = (bbox[0][1] + bbox[1][1]) / 2.0
+            else:
+                lng = datajson['coordinates']['coordinates'][0]
+                lat = datajson['coordinates']['coordinates'][1]
+            row = {
+                'id': id,
+                'username': username,
+                'created_at': created_at,
+                'lng': lng,
+                'lat': lat,
+                'text': text
+            }
+
+            print (row)
+            self.writer.writerow(row)
+        else:
+            self.f.close()
+            print ("finish.")
+            return False
+
+
+if __name__ == "__main__":
+    # These are provided to you through the Twitter API after you create a account
+    # register a Twitter App to get the keys and access tokens.
+    output_file = "assets/geotags.csv"
+
+    # Apply for your own Twitter API keys at https://developer.twitter.com/en/apply-for-access
+    consumer_key = "iGLeDbWuEmJc1Y4Y373rdC8xl"
+    consumer_secret = "V0mdIfmFAA97H3ImGLS0ODprP3ZADWGyv46LyvrGkjE6W1xS93"
+    access_token = "14324013-1uLpCg1HnX1AjWFD2tQCydq9sbAaWU1bXd2xz7dgG"
+    access_token_secret = "Qq2Frieih7y0WrMwZz9yWPZXkfDbFBuWJ7u5r2cUEhkPE"
+
+
+    myauth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    myauth.set_access_token(access_token, access_token_secret)
+
+    # LOCATIONS are the longitude, latitude coordinate corners for a box that restricts the
+    # geographic area from which you will stream tweets. The first two define the southwest
+    # corner of the box and the second two define the northeast corner of the box.
+    LOCATIONS = [-124.7771694, 24.520833, -66.947028, 49.384472,  # Contiguous US
+                 -164.639405, 58.806859, -144.152365, 71.76871,  # Alaska
+                 -160.161542, 18.776344, -154.641396, 22.878623]  # Hawaii
+
+    stream_listener = StreamListener(time_limit=60, file=output_file)
+    stream = tweepy.Stream(auth=myauth, listener=stream_listener)
+    stream.filter(locations=LOCATIONS)
+
+
+#######
+#######
+#End of 02_geosearch.py
+######
+######
+
+
+#my own Bot
+
 
 import csv
 
@@ -19,14 +170,14 @@ fieldnames = ['username', 'userid', 'profile_location', 'created_at', 'text', 'r
 # Create a writer to write the structured data to the csv file.
 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 # Write the header to the csv file
-writer.writeheader()
+writer.writeheader("geo_hist_tweets")
 
 
 # Apply for your own Twitter API keys at https://developer.twitter.com/en/apply-for-access
-consumer_key = "your_consumer_key"
-consumer_secret = "your_consumer_secret"
-access_token = "your_access_token"
-access_token_secret = "your_access_token_secret"
+consumer_key = "iGLeDbWuEmJc1Y4Y373rdC8xl"
+consumer_secret = "V0mdIfmFAA97H3ImGLS0ODprP3ZADWGyv46LyvrGkjE6W1xS93"
+access_token = "14324013-1uLpCg1HnX1AjWFD2tQCydq9sbAaWU1bXd2xz7dgG"
+access_token_secret = "Qq2Frieih7y0WrMwZz9yWPZXkfDbFBuWJ7u5r2cUEhkPE"
 
 
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
